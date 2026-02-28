@@ -22,24 +22,9 @@ The project focuses on **Permutation Decision Trees (PDT)** for short-horizon fo
 
 ---
 
-## Project Structure
-├── app.py
-├── services.py
-├── models.py
-├── app_secrets.py          # local only (NOT committed)
-├── requirements.txt
-├── templates/
-│   ├── base.html
-│   ├── index.html
-│   ├── result.html
-│   └── error.html
-└── static/
-└── styles.css
----
-
 ## Setup
 
-### 1) Create and activate a virtual environment
+### Create and activate a virtual environment
 
 ```bash
 python3 -m venv .venv
