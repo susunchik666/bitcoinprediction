@@ -1,8 +1,30 @@
 {% extends "base.html" %}
+{% block title %}Error • BTC Forecast Lab{% endblock %}
+{% block hero_title %}Error{% endblock %}
+
 {% block content %}
-  <h1>Ошибка</h1>
-  <div class="card">
-    <pre style="white-space: pre-wrap">{{ message }}</pre>
+<div class="panel">
+  <div class="panel-head">
+    <div>
+      <h2 class="h5 mb-1 fw-semibold">Something went wrong</h2>
+      <div class="text-white-50 small">Check parameters and API access.</div>
+    </div>
+    <span class="tag">Error</span>
   </div>
-  <p><a href="/">← Назад</a></p>
+
+  <div class="mt-3 alert alert-dark border border-white-10 text-white-75">
+    {{ message }}
+  </div>
+
+  <div class="callout mt-3">
+    <div class="callout-title">If it complains about a token</div>
+    <div class="callout-text">
+      Create <code>app_secrets.py</code> next to <code>app.py</code> and set <code>TINKOFF_TOKEN</code>.
+    </div>
+  </div>
+
+  <div class="mt-4">
+    <a class="btn btn-primary app-btn" href="{{ url_for('index') }}">Back</a>
+  </div>
+</div>
 {% endblock %}

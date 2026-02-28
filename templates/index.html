@@ -1,28 +1,151 @@
 {% extends "base.html" %}
+{% block title %}Run • Bitcoin Forecasting{% endblock %}
+{% block hero_title %}Run an experiment{% endblock %}
+
 {% block content %}
-  <h1>Свечи по FIGI / instrument_id</h1>
-  <p class="hint">SDK: <b>{{ sdk }}</b></p>
+<div class="row g-4">
+  <div class="col-lg-5">
+    <div class="card glass p-4">
+      <div class="d-flex align-items-start justify-content-between gap-2">
+        <div>
+          <h2 class="h5 fw-semibold mb-1">Experiment setup</h2>
+          <div class="muted">Configure data, task, model and evaluation split.</div>
+        </div>
+        <span class="chip">Setup</span>
+      </div>
 
-  <form method="post" action="/run" class="card">
-    <label>FIGI / instrument_id</label>
-    <input name="instrument_id" value="{{ default_instrument_id }}" required>
+      <form method="POST" action="{{ url_for('run') }}" class="mt-3">
+        <!-- Data -->
+        <div class="mb-3">
+          <label class="form-label">Instrument (FIGI / ticker)</label>
+          <input class="form-control input-dark" name="instrument_id" value="{{ default_instrument_id }}" required>
+          <div class="form-text muted">Used to fetch candles for the chart and table preview.</div>
+        </div>
 
-    <label>Дней назад</label>
-    <input name="days_back" type="number" min="1" max="365" value="{{ default_days }}" required>
+        <div class="row g-3">
+          <div class="col-sm-6">
+            <label class="form-label">History window</label>
+            <div class="input-group">
+              <input class="form-control input-dark" type="number" name="days_back" min="1" value="{{ default_days }}" required>
+              <span class="input-group-text input-addon">days</span>
+            </div>
+          </div>
 
-    <label>Интервал</label>
-    <select name="interval">
-      {% for v in ["1m","5m","15m","1h","4h","1d"] %}
-        <option value="{{v}}" {% if v==default_interval %}selected{% endif %}>{{v}}</option>
-      {% endfor %}
-    </select>
+          <div class="col-sm-6">
+            <label class="form-label">Candle interval</label>
+            {% set iv = default_interval %}
+            <select class="form-select input-dark" name="interval">
+              <option value="1m"  {% if iv=="1m" %}selected{% endif %}>1m</option>
+              <option value="5m"  {% if iv=="5m" %}selected{% endif %}>5m</option>
+              <option value="15m" {% if iv=="15m" %}selected{% endif %}>15m</option>
+              <option value="1h"  {% if iv=="1h" %}selected{% endif %}>1h</option>
+              <option value="4h"  {% if iv=="4h" %}selected{% endif %}>4h</option>
+              <option value="1d"  {% if iv=="1d" %}selected{% endif %}>1d</option>
+            </select>
+          </div>
+        </div>
 
-    <button type="submit">Получить свечи</button>
-  </form>
+        <div class="divider my-4"></div>
 
-  <div class="card">
-    <h3>Установка SDK (Python 3.12)</h3>
-    <pre>$ pip install t-tech-investments --index-url https://opensource.tbank.ru/api/v4/projects/238/packages/pypi/simple</pre>
-    <p class="hint">Источник: документация T‑Bank Dev Portal.</p>
+        <!-- ML -->
+        <div class="row g-3">
+          <div class="col-sm-6">
+            <label class="form-label">Task</label>
+            {% set t = default_task %}
+            <select class="form-select input-dark" name="task">
+              <option value="cls" {% if t=="cls" %}selected{% endif %}>Classification (UP/DOWN)</option>
+              <option value="reg" {% if t=="reg" %}selected{% endif %}>Regression (price)</option>
+            </select>
+          </div>
+
+          <div class="col-sm-6">
+            <label class="form-label">Model</label>
+            {% set m = default_model %}
+            <select class="form-select input-dark" name="model">
+              <option value="pdt"  {% if m=="pdt" %}selected{% endif %}>PDT (ensemble)</option>
+              <option value="tree" {% if m=="tree" %}selected{% endif %}>Decision Tree (baseline)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="row g-3 mt-1">
+          <div class="col-sm-6">
+            <label class="form-label">Horizon</label>
+            <div class="input-group">
+              <input class="form-control input-dark" type="number" name="horizon" min="1" value="{{ default_horizon }}">
+              <span class="input-group-text input-addon">days</span>
+            </div>
+          </div>
+
+          <div class="col-sm-6">
+            <label class="form-label">Train split</label>
+            <div class="input-group">
+              <input class="form-control input-dark" type="number" name="train_ratio" min="0.5" max="0.95" step="0.05" value="{{ default_train_ratio }}">
+              <span class="input-group-text input-addon">ratio</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="divider my-4"></div>
+
+        <button class="btn btn-primary btn-lg w-100 btn-accent" type="submit">
+          Run → Train & visualize
+        </button>
+
+        <div class="mt-3 muted small">
+          Output: forecast + metrics + candlestick chart with Ichimoku + data preview.
+        </div>
+      </form>
+    </div>
+
+    <div class="mt-3 card glass p-3">
+      <div class="d-flex align-items-center justify-content-between">
+        <div class="fw-semibold">Notes</div>
+        <span class="chip chip-muted">tips</span>
+      </div>
+      <div class="muted small mt-1">
+        PDT here is implemented as a lightweight permutation-bootstrapped ensemble for stability.
+      </div>
+    </div>
   </div>
+
+  <div class="col-lg-7">
+    <div class="card glass p-4">
+      <div class="d-flex align-items-start justify-content-between gap-2">
+        <div>
+          <h2 class="h5 fw-semibold mb-1">Pipeline overview</h2>
+          <div class="muted">A clean end-to-end workflow for a forecasting project.</div>
+        </div>
+        <span class="chip">Workflow</span>
+      </div>
+
+      <div class="mt-3 grid">
+        <div class="tile">
+          <div class="tile-k">1) Data</div>
+          <div class="tile-v">BTC candles (OHLCV) from the API.</div>
+        </div>
+        <div class="tile">
+          <div class="tile-k">2) Features</div>
+          <div class="tile-v">Returns, volatility, Ichimoku-derived signals.</div>
+        </div>
+        <div class="tile">
+          <div class="tile-k">3) Model</div>
+          <div class="tile-v">PDT (ensemble) vs Decision Tree baseline.</div>
+        </div>
+        <div class="tile">
+          <div class="tile-k">4) Output</div>
+          <div class="tile-v">Forecast + confidence + metrics + visualization.</div>
+        </div>
+      </div>
+
+      <div class="mt-4 preview">
+        <div class="preview-top">
+          <div class="fw-semibold">Preview</div>
+          <div class="muted small">Results page renders forecast cards and the chart.</div>
+        </div>
+        <div class="preview-box"></div>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}

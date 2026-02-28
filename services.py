@@ -137,3 +137,188 @@ def plot_candles_base64(df: pd.DataFrame) -> str:
 
 def sdk_name() -> str:
     return _SDK_NAME
+
+
+import numpy as np
+from sklearn.metrics import accuracy_score, f1_score, mean_absolute_error, mean_squared_error
+
+from models import PDTClassifier, PDTRegressor
+
+
+def ichimoku_components(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Ichimoku components.
+    For ML features we avoid "future-shifted" spans to prevent leakage.
+    For plotting we can still use the classic shifts later.
+    """
+    high = df["high"]
+    low = df["low"]
+    close = df["close"]
+
+    tenkan = (high.rolling(9).max() + low.rolling(9).min()) / 2.0
+    kijun = (high.rolling(26).max() + low.rolling(26).min()) / 2.0
+
+    span_a_raw = (tenkan + kijun) / 2.0
+    span_b_raw = (high.rolling(52).max() + low.rolling(52).min()) / 2.0
+
+    out = pd.DataFrame(
+        {
+            "tenkan": tenkan,
+            "kijun": kijun,
+            "span_a_raw": span_a_raw,
+            "span_b_raw": span_b_raw,
+            "close": close,
+        },
+        index=df.index,
+    )
+    return out
+
+
+def build_features(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Basic feature set: returns, volatility, volume change + Ichimoku (no leakage).
+    """
+    dfi = df.copy()
+
+    dfi["ret_1"] = dfi["close"].pct_change()
+    dfi["ret_3"] = dfi["close"].pct_change(3)
+    dfi["vol_10"] = dfi["ret_1"].rolling(10).std()
+    dfi["ma_10"] = dfi["close"].rolling(10).mean()
+    dfi["ma_20"] = dfi["close"].rolling(20).mean()
+    dfi["vol_chg"] = dfi["volume"].pct_change().replace([np.inf, -np.inf], np.nan)
+
+    ichi = ichimoku_components(dfi)
+    dfi["tenkan"] = ichi["tenkan"]
+    dfi["kijun"] = ichi["kijun"]
+    dfi["cloud_thickness"] = (ichi["span_a_raw"] - ichi["span_b_raw"]).abs()
+
+    # Drop raw OHLC columns? Keep close/volume for signal is ok.
+    feat_cols = [
+        "ret_1", "ret_3", "vol_10", "ma_10", "ma_20",
+        "vol_chg", "tenkan", "kijun", "cloud_thickness",
+    ]
+    return dfi[feat_cols]
+
+
+def make_dataset(df: pd.DataFrame, horizon: int, task: str):
+    Xdf = build_features(df)
+    if task == "cls":
+        y = (df["close"].shift(-horizon) > df["close"]).astype(int)
+    else:
+        y = df["close"].shift(-horizon)
+
+    data = Xdf.copy()
+    data["y"] = y
+    data = data.dropna()
+
+    X = data.drop(columns=["y"]).to_numpy(dtype=float)
+    y = data["y"].to_numpy()
+    return X, y, data.index
+
+
+def train_and_predict(df: pd.DataFrame, horizon: int, task: str, model_name: str, train_ratio: float):
+    X, y, idx = make_dataset(df, horizon=horizon, task=task)
+
+    n = len(X)
+    split = max(10, int(n * train_ratio))
+    split = min(split, n - 1)
+
+    X_train, y_train = X[:split], y[:split]
+    X_test, y_test = X[split:], y[split:]
+
+    if task == "cls":
+        if model_name == "tree":
+            model = DecisionTreeClassifier(max_depth=5, random_state=42)
+        else:
+            model = PDTClassifier(n_estimators=35, max_depth=5, random_state=42)
+
+        model.fit(X_train, y_train)
+        proba = model.predict_proba(X_test)[:, 1]
+        pred = (proba >= 0.5).astype(int)
+
+        metrics = {
+            "Accuracy": float(accuracy_score(y_test, pred)),
+            "F1": float(f1_score(y_test, pred)),
+        }
+
+        # Forecast for the last available row
+        last_proba = float(model.predict_proba(X[-1:].copy())[:, 1][0])
+        direction = "UP" if last_proba >= 0.5 else "DOWN"
+        return {
+            "task": "cls",
+            "direction": direction,
+            "proba_up": last_proba,
+            "metrics": metrics,
+        }
+
+    else:
+        if model_name == "tree":
+            model = DecisionTreeRegressor(max_depth=5, random_state=42)
+        else:
+            model = PDTRegressor(n_estimators=35, max_depth=5, random_state=42)
+
+        model.fit(X_train, y_train)
+        pred = model.predict(X_test)
+
+        rmse = mean_squared_error(y_test, pred, squared=False)
+        mae = mean_absolute_error(y_test, pred)
+
+        metrics = {"MAE": float(mae), "RMSE": float(rmse)}
+
+        y_hat = float(model.predict(X[-1:].copy())[0])
+        return {
+            "task": "reg",
+            "y_hat": y_hat,
+            "metrics": metrics,
+        }
+
+
+def plot_candles_with_ichimoku_base64(df: pd.DataFrame, forecast: dict, horizon: int) -> str:
+    """
+    Prettier plot:
+    - candles + volume
+    - Ichimoku (tenkan/kijun + cloud)
+    - marker for forecasted point
+    """
+    dfi = df.copy()
+
+    ichi = ichimoku_components(dfi)
+    tenkan = ichi["tenkan"]
+    kijun = ichi["kijun"]
+    span_a = ((tenkan + kijun) / 2.0).shift(26)
+    span_b = ((dfi["high"].rolling(52).max() + dfi["low"].rolling(52).min()) / 2.0).shift(26)
+
+    addplots = []
+    addplots.append(mpf.make_addplot(tenkan, color="deepskyblue", width=1))
+    addplots.append(mpf.make_addplot(kijun, color="orange", width=1))
+    addplots.append(mpf.make_addplot(span_a, color="lime", width=1, alpha=0.6))
+    addplots.append(mpf.make_addplot(span_b, color="red", width=1, alpha=0.6))
+
+    # Marker: predicted next point (use last close + horizon shift as a visual anchor)
+    marker_series = pd.Series(index=dfi.index, dtype=float)
+    last_idx = dfi.index[-1]
+    if forecast.get("task") == "reg":
+        marker_series.loc[last_idx] = forecast["y_hat"]
+    else:
+        # for classification just mark last close
+        marker_series.loc[last_idx] = float(dfi["close"].iloc[-1])
+
+    addplots.append(
+        mpf.make_addplot(marker_series, type="scatter", markersize=80, marker="*", color="gold")
+    )
+
+    buf = BytesIO()
+
+    mpf.plot(
+        dfi,
+        type="candle",
+        volume=True,
+        style="yahoo",
+        addplot=addplots,
+        fill_between=dict(y1=span_a.values, y2=span_b.values, alpha=0.08, color="gray"),
+        savefig=dict(fname=buf, dpi=160, bbox_inches="tight"),
+    )
+
+    buf.seek(0)
+    b64 = base64.b64encode(buf.read()).decode("ascii")
+    return f"data:image/png;base64,{b64}"

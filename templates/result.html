@@ -1,22 +1,103 @@
 {% extends "base.html" %}
+{% block title %}Result • Bitcoin Forecasting{% endblock %}
+{% block hero_title %}Result{% endblock %}
+
 {% block content %}
-  <h1>Результат</h1>
-  <p class="hint">
-    FIGI / instrument_id: <b>{{ instrument_id }}</b> ·
-    дней: <b>{{ days_back }}</b> ·
-    интервал: <b>{{ interval }}</b> ·
-    свечей: <b>{{ n }}</b> ·
-    SDK: <b>{{ sdk }}</b>
-  </p>
+<div class="row g-4">
+  <div class="col-lg-4">
+    <div class="card glass p-4">
+      <div class="d-flex align-items-start justify-content-between gap-2">
+        <div>
+          <h2 class="h5 fw-semibold mb-1">Experiment summary</h2>
+          <div class="muted">Parameters, forecast and metrics.</div>
+        </div>
+        <span class="chip">Run</span>
+      </div>
 
-  <div class="card">
-    <img src="{{ chart_uri }}" alt="candles chart">
+      <div class="mt-3 kv">
+        <div class="k">Instrument</div><div class="v">{{ instrument_id }}</div>
+      </div>
+      <div class="kv">
+        <div class="k">Days back</div><div class="v">{{ days_back }}</div>
+      </div>
+      <div class="kv">
+        <div class="k">Interval</div><div class="v">{{ interval }}</div>
+      </div>
+      <div class="kv">
+        <div class="k">Rows</div><div class="v">{{ n }}</div>
+      </div>
+
+      <div class="kv">
+        <div class="k">Task</div><div class="v">{{ "Classification" if task=="cls" else "Regression" }}</div>
+      </div>
+      <div class="kv">
+        <div class="k">Model</div><div class="v">{{ model|upper }}</div>
+      </div>
+      <div class="kv">
+        <div class="k">Horizon</div><div class="v">{{ horizon }} day(s)</div>
+      </div>
+
+      <div class="divider my-4"></div>
+
+      <!-- Forecast card -->
+      <div class="card glass p-3">
+        <div class="d-flex justify-content-between align-items-start">
+          <div>
+            <div class="muted small">Forecast</div>
+            {% if forecast.task == "cls" %}
+              <div class="display-6 fw-bold mb-1">{{ forecast.direction }}</div>
+              <div class="muted">P(UP): <span class="fw-semibold">{{ (forecast.proba_up * 100) | round(2) }}%</span></div>
+            {% else %}
+              <div class="display-6 fw-bold mb-1">{{ forecast.y_hat | round(2) }}</div>
+              <div class="muted">Predicted close (t + {{ horizon }}d)</div>
+            {% endif %}
+          </div>
+          <span class="chip chip-accent">{{ model|upper }}</span>
+        </div>
+      </div>
+
+      <!-- Metrics -->
+      <div class="mt-3 grid">
+        {% for k, v in forecast.metrics.items() %}
+          <div class="tile">
+            <div class="tile-k">{{ k }}</div>
+            <div class="tile-v">{{ v | round(4) }}</div>
+          </div>
+        {% endfor %}
+      </div>
+
+      <a class="btn btn-outline-light w-100 mt-4 btn-soft" href="{{ url_for('index') }}">Run again</a>
+    </div>
   </div>
 
-  <div class="card">
-    <h3>Последние строки таблицы</h3>
-    {{ table_html | safe }}
-  </div>
+  <div class="col-lg-8">
+    <div class="card glass p-4">
+      <div class="d-flex align-items-start justify-content-between gap-2">
+        <div>
+          <h2 class="h5 fw-semibold mb-1">Candlestick chart</h2>
+          <div class="muted">Candles + Ichimoku + forecast marker.</div>
+        </div>
+        <span class="chip">Chart</span>
+      </div>
 
-  <p><a href="/">← Назад</a></p>
+      <div class="chart mt-3">
+        <img src="{{ chart_uri }}" class="img-fluid" alt="BTC chart">
+      </div>
+    </div>
+
+    <div class="card glass p-4 mt-4">
+      <div class="d-flex justify-content-between align-items-end flex-wrap gap-2">
+        <div>
+          <h3 class="h6 fw-semibold mb-1">Data preview</h3>
+          <div class="muted">Last rows for a quick sanity check.</div>
+        </div>
+        <span class="chip chip-muted">tail(30)</span>
+      </div>
+
+      <div class="table-wrap mt-3">
+        {{ table_html | safe }}
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
